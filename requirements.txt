@@ -1,0 +1,6 @@
+# Nessuna dipendenza esterna: scraper.py, generate_ics.py e main.py usano
+# solo la libreria standard di Python (urllib, json, re, datetime, ...).
+# Questo file esiste solo perche' il workflow GitHub Actions esegue comunque
+# "pip install -r requirements.txt" (per restare pronti ad aggiungere in
+# futuro una dipendenza, es. se UNIPA introducesse protezioni anti-bot che
+# richiedano la libreria "requests").

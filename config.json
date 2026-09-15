@@ -1,0 +1,15 @@
+{
+  "unipa": {
+    "base_url": "https://offertaformativa.unipa.it/offweb/public/aula/weekCalendar.seam",
+    "cc": "2392",
+    "aci": "1",
+    "indirizzo": "",
+    "docenza": ""
+  },
+  "calendar_name": "UNIPA - Psicologia Clinica (1° anno)",
+  "uid_domain": "unipa-calendar-2392.local",
+  "prodid": "-//unipa-calendar//cc2392//IT",
+  "output_file": "calendar.ics",
+  "min_expected_events": 1,
+  "http_timeout_seconds": 30
+}
