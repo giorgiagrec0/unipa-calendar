@@ -1,0 +1,61 @@
+name: Aggiorna calendario UNIPA
+
+on:
+  # Esecuzione manuale dal tab "Actions" di GitHub
+  workflow_dispatch: {}
+  # Esecuzione automatica ogni 3 ore
+  schedule:
+    - cron: "0 */3 * * *"
+  # Aggiorna anche quando lo script viene modificato (utile in fase di sviluppo)
+  push:
+    branches: [main]
+    paths:
+      - "scraper.py"
+      - "generate_ics.py"
+      - "main.py"
+      - "config.json"
+      - ".github/workflows/update-calendar.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-calendar
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configura Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installa le dipendenze
+        run: pip install -r requirements.txt
+
+      - name: Genera calendar.ics
+        run: python3 main.py --config config.json --debug
+
+      - name: Verifica che il file generato sia valido
+        run: |
+          test -s calendar.ics
+          grep -q "BEGIN:VCALENDAR" calendar.ics
+          grep -q "BEGIN:VEVENT" calendar.ics
+          echo "Numero di lezioni pubblicate: $(grep -c '^BEGIN:VEVENT' calendar.ics)"
+
+      - name: Pubblica calendar.ics (commit automatico)
+        run: |
+          git config user.name "unipa-calendar-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if git diff --quiet -- calendar.ics; then
+            echo "Nessuna modifica agli orari: niente da pubblicare."
+          else
+            git add calendar.ics
+            git commit -m "Aggiorna calendar.ics [automatico]"
+            git push
+          fi
