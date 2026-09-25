@@ -11,6 +11,11 @@ NON viene sovrascritto e lo script termina con codice di uscita 1 (che in
 GitHub Actions fa fallire il workflow, cosi' non pubblichi mai un
 calendario vuoto per errore).
 
+Oltre a calendar.ics (tutte le lezioni) genera nella cartella "cal/" un
+calendario personalizzato per ogni combinazione di gruppi/cattedre definita
+in "scelte" dentro config.json, piu' cal/scelte.json che index.html usa per
+mostrare a ogni studente il link giusto.
+
 Uso:
     python3 main.py --config config.json [--debug]
 
@@ -21,6 +26,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import logging
 import re
@@ -40,16 +46,17 @@ def load_config(path: str) -> dict:
         return json.load(f)
 
 
-def parse_title(title: str) -> tuple[str, str]:
+def parse_title(title: str) -> tuple[str, str, str]:
     """Spezza il campo 'title' di OFFWEB (che contiene insieme insegnamento,
     eventuale modulo, docente e gruppo/cattedra) in:
       - subject: nome insegnamento (+ eventuale "- Mod. ...") -> SUMMARY
       - description: "Docente: ..." + gruppo/cattedra                -> DESCRIPTION
+      - variant: gruppo/cattedra (es. "gruppo G1"), "" se assente
     """
     title_norm = re.sub(r"\s+", " ", title).strip()
     segments = [s.strip() for s in title_norm.split(" - ") if s.strip()]
     if not segments:
-        return title_norm, ""
+        return title_norm, "", ""
 
     subject = segments[0]
     docente = None
@@ -67,7 +74,7 @@ def parse_title(title: str) -> tuple[str, str]:
         desc_parts.append(f"Docente: {docente}")
     if note:
         desc_parts.append(", ".join(note))
-    return subject, "\n".join(desc_parts)
+    return subject, "\n".join(desc_parts), (note[-1] if note else "")
 
 
 def transform(raw_events: list, cc: str, domain: str) -> list[LessonEvent]:
@@ -87,7 +94,7 @@ def transform(raw_events: list, cc: str, domain: str) -> list[LessonEvent]:
             skipped += 1
             continue
 
-        subject, description = parse_title(title)
+        subject, description, variant = parse_title(title)
         uid = build_uid(cc, event_id, domain)
         if uid in seen_uids:
             logger.warning("UID duplicato ignorato: %s", uid)
@@ -102,6 +109,7 @@ def transform(raw_events: list, cc: str, domain: str) -> list[LessonEvent]:
             end=end,
             location=location,
             description=description,
+            variant=variant,
         ))
 
     out.sort(key=lambda e: e.start)
@@ -115,6 +123,125 @@ def count_existing_events(ics_path: Path) -> int:
         return 0
     text = ics_path.read_text(encoding="utf-8", errors="replace")
     return len(re.findall(r"^BEGIN:VEVENT", text, re.MULTILINE))
+
+
+def write_if_changed(path: Path, text: str) -> bool:
+    """Scrive il file solo se le lezioni sono cambiate. DTSTAMP (l'ora di
+    generazione) cambia a ogni esecuzione e non va considerato, altrimenti
+    ogni 3 ore verrebbe fatto un commit anche senza modifiche agli orari."""
+    def strip_stamp(s: str) -> str:
+        return re.sub(r"^DTSTAMP:.*$", "", s, flags=re.MULTILINE)
+
+    if path.exists():
+        # newline="": confronta i \r\n cosi' come sono scritti nel file
+        with open(path, encoding="utf-8", errors="replace", newline="") as f:
+            old = f.read()
+        if strip_stamp(old) == strip_stamp(text):
+            return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8", newline="")
+    return True
+
+
+TUTTI = "tutti"
+
+
+def option_code(label: str) -> str:
+    """Es. "gruppo G1" -> "G1", "cattedra A-L" -> "A-L"."""
+    return label.split()[-1].upper() if label.strip() else ""
+
+
+def find_choice(event: LessonEvent, choices: list) -> dict | None:
+    summary = event.summary.upper()
+    for choice in choices:
+        if choice["cerca"].upper() in summary:
+            return choice
+    return None
+
+
+def filter_events(events: list[LessonEvent], choices: list, selection: dict) -> list[LessonEvent]:
+    """Tiene le lezioni comuni + quelle del gruppo/cattedra scelto per ogni
+    insegnamento in "scelte". Le lezioni senza gruppo restano sempre."""
+    kept = []
+    for ev in events:
+        choice = find_choice(ev, choices)
+        if choice is None or not ev.variant:
+            kept.append(ev)
+            continue
+        wanted = selection[choice["id"]]
+        if wanted == TUTTI or option_code(ev.variant) == wanted:
+            kept.append(ev)
+    return kept
+
+
+def check_choices(events: list[LessonEvent], choices: list) -> None:
+    """Avvisa nel log se UNIPA pubblica gruppi/cattedre non previsti in
+    config.json, cosi' si sa che va aggiornata la lista delle opzioni."""
+    unknown: dict[str, set] = {}
+    for ev in events:
+        if not ev.variant:
+            continue
+        choice = find_choice(ev, choices)
+        if choice is None:
+            unknown.setdefault(ev.summary, set()).add(ev.variant)
+        elif option_code(ev.variant) not in {option_code(o) for o in choice["opzioni"]}:
+            unknown.setdefault(ev.summary, set()).add(ev.variant)
+    for summary, variants in unknown.items():
+        logger.warning(
+            "Gruppi/cattedre non previsti in config.json per %r: %s "
+            "(aggiungerli in 'scelte' per poterli selezionare).",
+            summary, ", ".join(sorted(variants)),
+        )
+
+
+def write_personal_calendars(events: list[LessonEvent], config: dict) -> None:
+    choices = config.get("scelte", [])
+    if not choices:
+        return
+    out_dir = Path(config.get("cartella_personalizzati", "cal"))
+    check_choices(events, choices)
+
+    codes_per_choice = [
+        [option_code(o) for o in c["opzioni"]] + [TUTTI] for c in choices
+    ]
+    generated = set()
+    changed = 0
+    for combo in itertools.product(*codes_per_choice):
+        selection = {c["id"]: code for c, code in zip(choices, combo)}
+        name = "_".join(f"{c['id']}-{code}" for c, code in zip(choices, combo)) + ".ics"
+        chosen = [code for code in combo if code != TUTTI]
+        cal_name = config.get("calendar_name", "UNIPA")
+        if chosen:
+            cal_name = f"{cal_name} ({', '.join(chosen)})"
+        ics_text = render_calendar(
+            filter_events(events, choices, selection),
+            calendar_name=cal_name,
+            prodid=config.get("prodid", "-//unipa-calendar//IT"),
+        )
+        changed += write_if_changed(out_dir / name, ics_text)
+        generated.add(name)
+
+    # rimuove calendari di combinazioni non piu' previste in config.json
+    for old in out_dir.glob("*.ics"):
+        if old.name not in generated:
+            old.unlink()
+
+    manifest = {
+        "scelte": [
+            {
+                "id": c["id"],
+                "nome": c["nome"],
+                "opzioni": [{"codice": option_code(o), "etichetta": o} for o in c["opzioni"]],
+            }
+            for c in choices
+        ]
+    }
+    write_if_changed(
+        out_dir / "scelte.json",
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+    )
+    logger.info("Calendari personalizzati: %d (modificati: %d) in %s/.",
+                len(generated), changed, out_dir)
 
 
 def main(argv=None) -> int:
@@ -175,8 +302,8 @@ def main(argv=None) -> int:
         prodid=config.get("prodid", "-//unipa-calendar//IT"),
     )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(ics_text, encoding="utf-8", newline="")
+    write_if_changed(output_path, ics_text)
+    write_personal_calendars(events, config)
 
     logger.info(
         "OK: %d lezioni scritte in %s (precedenti: %d).",
