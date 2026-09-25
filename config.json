@@ -11,5 +11,26 @@
   "prodid": "-//unipa-calendar//cc2392//IT",
   "output_file": "calendar.ics",
   "min_expected_events": 1,
-  "http_timeout_seconds": 30
+  "http_timeout_seconds": 30,
+  "cartella_personalizzati": "cal",
+  "scelte": [
+    {
+      "id": "training",
+      "nome": "Gruppi di training esperienziali (laboratorio)",
+      "cerca": "GRUPPI DI TRAINING",
+      "opzioni": ["gruppo G1", "gruppo G2", "gruppo G3", "gruppo G4", "gruppo G5", "gruppo G6", "gruppo G7", "gruppo G8"]
+    },
+    {
+      "id": "deontologia",
+      "nome": "Deontologia professionale e aspetti etici (laboratorio)",
+      "cerca": "DEONTOLOGIA",
+      "opzioni": ["gruppo G1", "gruppo G2"]
+    },
+    {
+      "id": "setting",
+      "nome": "Psicodinamica dei setting clinici",
+      "cerca": "PSICODINAMICA DEI SETTING",
+      "opzioni": ["cattedra A-L", "cattedra M-Z"]
+    }
+  ]
 }
