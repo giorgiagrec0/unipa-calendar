@@ -48,6 +48,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import urllib.error
 import urllib.request
 
@@ -59,6 +60,9 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+
+RETRIES = 3
+RETRY_WAIT_SECONDS = 30
 
 
 class ScraperError(Exception):
@@ -102,16 +106,30 @@ def fetch_html(url: str, timeout: int = 30, debug: bool = False) -> str:
     if debug:
         logger.info("GET %s", url)
 
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            status = resp.status
-            raw = resp.read()
-            charset = resp.headers.get_content_charset() or "utf-8"
-            final_url = resp.geturl()
-    except urllib.error.HTTPError as e:
-        raise ScraperError(f"OFFWEB ha risposto con HTTP {e.code}: {e.reason}") from e
-    except urllib.error.URLError as e:
-        raise ScraperError(f"Impossibile raggiungere OFFWEB: {e.reason}") from e
+    # OFFWEB a volte e' lento o non risponde per qualche minuto: si riprova
+    # alcune volte prima di dichiarare fallita l'esecuzione.
+    for attempt in range(1, RETRIES + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                status = resp.status
+                raw = resp.read()
+                charset = resp.headers.get_content_charset() or "utf-8"
+                final_url = resp.geturl()
+            break
+        except urllib.error.HTTPError as e:
+            error = ScraperError(f"OFFWEB ha risposto con HTTP {e.code}: {e.reason}")
+            error.__cause__ = e
+        except urllib.error.URLError as e:
+            error = ScraperError(f"Impossibile raggiungere OFFWEB: {e.reason}")
+            error.__cause__ = e
+        except (TimeoutError, OSError) as e:
+            error = ScraperError(f"OFFWEB non ha risposto in tempo: {e}")
+            error.__cause__ = e
+        if attempt == RETRIES:
+            raise error
+        logger.warning("Tentativo %d/%d fallito (%s): riprovo tra %d secondi.",
+                       attempt, RETRIES, error, RETRY_WAIT_SECONDS)
+        time.sleep(RETRY_WAIT_SECONDS)
 
     if debug:
         logger.info("Status: %s | URL finale: %s | dimensione risposta: %d byte",
