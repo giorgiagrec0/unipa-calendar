@@ -1,0 +1,70 @@
+{
+  "scelte": [
+    {
+      "id": "training",
+      "nome": "Gruppi di training esperienziali (laboratorio)",
+      "opzioni": [
+        {
+          "codice": "G1",
+          "etichetta": "gruppo G1"
+        },
+        {
+          "codice": "G2",
+          "etichetta": "gruppo G2"
+        },
+        {
+          "codice": "G3",
+          "etichetta": "gruppo G3"
+        },
+        {
+          "codice": "G4",
+          "etichetta": "gruppo G4"
+        },
+        {
+          "codice": "G5",
+          "etichetta": "gruppo G5"
+        },
+        {
+          "codice": "G6",
+          "etichetta": "gruppo G6"
+        },
+        {
+          "codice": "G7",
+          "etichetta": "gruppo G7"
+        },
+        {
+          "codice": "G8",
+          "etichetta": "gruppo G8"
+        }
+      ]
+    },
+    {
+      "id": "deontologia",
+      "nome": "Deontologia professionale e aspetti etici (laboratorio)",
+      "opzioni": [
+        {
+          "codice": "G1",
+          "etichetta": "gruppo G1"
+        },
+        {
+          "codice": "G2",
+          "etichetta": "gruppo G2"
+        }
+      ]
+    },
+    {
+      "id": "setting",
+      "nome": "Psicodinamica dei setting clinici",
+      "opzioni": [
+        {
+          "codice": "A-L",
+          "etichetta": "cattedra A-L"
+        },
+        {
+          "codice": "M-Z",
+          "etichetta": "cattedra M-Z"
+        }
+      ]
+    }
+  ]
+}
