@@ -48,14 +48,14 @@ jobs:
           grep -q "BEGIN:VEVENT" calendar.ics
           echo "Numero di lezioni pubblicate: $(grep -c '^BEGIN:VEVENT' calendar.ics)"
 
-      - name: Pubblica calendar.ics (commit automatico)
+      - name: Pubblica calendar.ics e calendari personalizzati (commit automatico)
         run: |
           git config user.name "unipa-calendar-bot"
           git config user.email "actions@users.noreply.github.com"
-          if git diff --quiet -- calendar.ics; then
+          git add -A -- calendar.ics $( [ -d cal ] && echo cal )
+          if git diff --cached --quiet; then
             echo "Nessuna modifica agli orari: niente da pubblicare."
           else
-            git add calendar.ics
             git commit -m "Aggiorna calendar.ics [automatico]"
             git push
           fi
