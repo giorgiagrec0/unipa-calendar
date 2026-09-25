@@ -49,6 +49,10 @@ class LessonEvent:
     end: datetime
     location: str
     description: str
+    # gruppo/cattedra della lezione (es. "gruppo G1", "cattedra A-L"),
+    # vuoto per le lezioni uguali per tutti. Usato solo per i calendari
+    # personalizzati, non finisce nel file .ics.
+    variant: str = ""
 
 
 def _fold_line(line: str) -> str:
